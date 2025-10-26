@@ -141,7 +141,7 @@ const MyPayments = () => {
             <div className="flex items-center space-x-2">
               {payment.txHash && (
                 <a
-                  href={`https://testnet.algoexplorer.io/tx/${payment.txHash}`}
+                  href={`https://lora.algokit.io/testnet/transaction/${payment.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline flex items-center text-sm"

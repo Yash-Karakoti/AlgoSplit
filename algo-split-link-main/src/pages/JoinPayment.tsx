@@ -322,12 +322,12 @@ const JoinPayment = () => {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">View on Explorer</span>
                 <a
-                  href={`https://algoexplorer.io/tx/${payment.txHash}`}
+                  href={`https://lora.algokit.io/testnet/transaction/${payment.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline flex items-center"
                 >
-                  AlgoExplorer
+                  Lora Explorer
                   <ExternalLink className="w-3 h-3 ml-1" />
                 </a>
               </div>

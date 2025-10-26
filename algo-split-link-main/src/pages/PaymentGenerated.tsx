@@ -182,7 +182,7 @@ const PaymentGenerated = () => {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Transaction Hash</span>
                   <a
-                    href={`https://algoexplorer.io/tx/${payment.txHash}`}
+                    href={`https://lora.algokit.io/testnet/transaction/${payment.txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-primary hover:underline flex items-center"
