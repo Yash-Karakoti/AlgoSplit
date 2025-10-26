@@ -8,20 +8,99 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { usePayment } from '@/contexts/PaymentContext';
-import { useWallet } from '@/contexts/WalletContext';
+import { useWallet } from '@txnlab/use-wallet-react';
+import { supabase } from '@/lib/supabase/config';
 import { CheckCircle, Clock, User, Loader2, ExternalLink, Trophy } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const JoinPayment = () => {
   const { id } = useParams<{ id: string }>();
   const { getPayment, contributeToPayment } = usePayment();
-  const { isConnected, walletAddress, connectWallet } = useWallet();
+  const { activeAddress, wallets } = useWallet();
+  const isConnected = !!activeAddress;
+  const walletAddress = activeAddress || null;
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [payment, setPayment] = useState(() => getPayment(id!));
   
-  const payment = getPayment(id!);
+  // Function to reload payment data
+  const loadPaymentData = async () => {
+    try {
+      // Check if Supabase is configured
+      if (supabase && import.meta.env.VITE_SUPABASE_URL) {
+        console.log('Loading payment from Supabase with id:', id);
+        const { data, error } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('id', id!)
+          .single();
+
+        if (error) {
+          console.error('Error loading payment from Supabase:', error);
+          return;
+        }
+
+        if (data) {
+          console.log('Payment data loaded from Supabase:', data);
+          const formattedPayment = {
+            id: data.id,
+            title: data.title,
+            description: data.description,
+            totalAmount: data.total_amount,
+            currency: data.currency,
+            participants: data.participants,
+            receiverAddress: data.receiver_address,
+            createdAt: new Date(data.created_at),
+            expiryDate: data.expiry_date ? new Date(data.expiry_date) : undefined,
+            collected: data.collected || 0,
+            contributors: data.contributors || [],
+            status: data.status || 'active',
+            txHash: data.tx_hash,
+          };
+          setPayment(formattedPayment);
+        }
+      } else {
+        // Fall back to localStorage
+        console.log('Loading payment from localStorage with id:', id);
+        const stored = localStorage.getItem('algoPayMe_payments');
+        console.log('JoinPayment - localStorage data:', stored);
+        
+        if (stored) {
+          const allPayments = JSON.parse(stored);
+          const paymentData = allPayments[id!];
+          console.log('JoinPayment - Payment data for id:', id, paymentData);
+          
+          if (paymentData) {
+            const formattedPayment = {
+              id: paymentData.payment.id,
+              title: paymentData.payment.title,
+              description: paymentData.payment.description,
+              totalAmount: paymentData.payment.totalAmount,
+              currency: paymentData.payment.currency,
+              participants: paymentData.payment.participants,
+              receiverAddress: paymentData.payment.receiverAddress,
+              createdAt: new Date(paymentData.payment.createdAt),
+              expiryDate: paymentData.payment.expiryDate ? new Date(paymentData.payment.expiryDate) : undefined,
+              collected: paymentData.collected || 0,
+              contributors: paymentData.contributors || [],
+              status: paymentData.status || 'active',
+              txHash: paymentData.txHash,
+            };
+            setPayment(formattedPayment);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading payment:', error);
+    }
+  };
+  
+  // Reload payment from Supabase or localStorage on mount
+  useEffect(() => {
+    loadPaymentData();
+  }, [id]);
 
   useEffect(() => {
     if (payment?.status === 'completed' && !showCompletionModal) {
@@ -43,22 +122,29 @@ const JoinPayment = () => {
 
   const progressPercentage = (payment.collected / payment.totalAmount) * 100;
   const perPersonAmount = payment.totalAmount / payment.participants;
-  const hasContributed = payment.contributors.some((c) => c.address === walletAddress);
+  const hasContributed = activeAddress ? payment.contributors.some((c) => c.address === activeAddress) : false;
 
   const handlePayment = async () => {
-    if (!isConnected) {
+    if (!isConnected || !activeAddress) {
       toast.error('Please connect your wallet first');
       return;
     }
-
+    
     setIsProcessing(true);
     
-    // Simulate transaction
-    setTimeout(() => {
-      contributeToPayment(id!, perPersonAmount, walletAddress!);
-      setIsProcessing(false);
+    try {
+      // Wallet is connected, proceed with payment
+      await contributeToPayment(id!, perPersonAmount, activeAddress);
       toast.success('Payment successful!');
-    }, 2000);
+      
+      // Reload payment data to update UI
+      await loadPaymentData();
+    } catch (error: any) {
+      toast.error(error.message || 'Payment failed');
+      console.error('Payment error:', error);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -140,7 +226,7 @@ const JoinPayment = () => {
               </div>
 
               <div className="text-sm text-muted-foreground text-center p-4 rounded-lg bg-muted/30">
-                💡 Funds are securely held in a smart contract until the target is reached
+                💡 Payments are sent directly to the payment creator in real-time
               </div>
             </div>
           </Card>
@@ -169,31 +255,21 @@ const JoinPayment = () => {
                     </p>
                   </div>
 
-                  {!isConnected ? (
-                    <Button
-                      onClick={connectWallet}
-                      size="lg"
-                      className="w-full gradient-primary shadow-glow"
-                    >
-                      Connect Wallet to Pay
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={handlePayment}
-                      size="lg"
-                      className="w-full gradient-primary shadow-glow"
-                      disabled={isProcessing}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                          Processing Payment...
-                        </>
-                      ) : (
-                        `Pay ${perPersonAmount.toFixed(2)} ${payment.currency}`
-                      )}
-                    </Button>
-                  )}
+                  <Button
+                    onClick={handlePayment}
+                    size="lg"
+                    className="w-full gradient-primary shadow-glow"
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Processing Payment...
+                      </>
+                    ) : (
+                      `Pay ${perPersonAmount.toFixed(2)} ${payment.currency}`
+                    )}
+                  </Button>
                 </div>
               )}
             </Card>
@@ -241,7 +317,7 @@ const JoinPayment = () => {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Smart Contract</span>
-                <span className="font-mono text-xs">{payment.contractAddress}</span>
+                <span className="font-mono text-xs">Smart Contract</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">View on Explorer</span>
