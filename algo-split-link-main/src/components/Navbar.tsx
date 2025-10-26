@@ -1,14 +1,23 @@
 import { Link } from 'react-router-dom';
-import { useWallet } from '@/contexts/WalletContext';
+import { useWallet } from '@txnlab/use-wallet-react';
 import { Button } from '@/components/ui/button';
-import { Wallet, Menu } from 'lucide-react';
+import { Wallet, Menu, LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ConnectWallet from './ConnectWallet';
+import { useState } from 'react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ellipseAddress } from '@/lib/utils';
 
 const Navbar = () => {
-  const { isConnected, walletAddress, connectWallet, disconnectWallet } = useWallet();
+  const { activeAddress, activeWallet } = useWallet();
+  const isConnected = !!activeAddress;
+  const walletAddress = activeAddress || null;
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
 
-  const truncateAddress = (address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const handleDisconnect = async () => {
+    if (activeWallet) {
+      await activeWallet.disconnect();
+    }
   };
 
   return (
@@ -28,7 +37,7 @@ const Navbar = () => {
                 <Wallet className="w-6 h-6 text-primary-foreground" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                AlgoPayMe
+                AlgoSplit
               </span>
             </motion.div>
           </Link>
@@ -37,6 +46,11 @@ const Navbar = () => {
             <Link to="/create" className="text-foreground hover:text-primary transition-smooth">
               Create Payment
             </Link>
+            {isConnected && (
+              <Link to="/my-payments" className="text-foreground hover:text-primary transition-smooth">
+                My Payments
+              </Link>
+            )}
             <a href="#how-it-works" className="text-foreground hover:text-primary transition-smooth">
               How It Works
             </a>
@@ -52,23 +66,29 @@ const Navbar = () => {
                 animate={{ scale: 1 }}
                 className="flex items-center space-x-2"
               >
-                <div className="px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-sm font-medium">
-                  {truncateAddress(walletAddress)}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={disconnectWallet}
-                  className="hidden md:flex"
-                >
-                  Disconnect
-                </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="secondary" className="flex items-center gap-2">
+                        <Wallet className="h-4 w-4" />
+                        {ellipseAddress(walletAddress)}
+                      </Button>
+                    </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleDisconnect} className="cursor-pointer">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Disconnect</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </motion.div>
             ) : (
-              <Button onClick={connectWallet} className="gradient-primary shadow-glow">
-                <Wallet className="w-4 h-4 mr-2" />
-                Connect Wallet
-              </Button>
+              <>
+                <Button onClick={() => setIsConnectModalOpen(true)} className="gradient-primary shadow-glow">
+                  <Wallet className="w-4 h-4 mr-2" />
+                  Connect Wallet
+                </Button>
+                <ConnectWallet openModal={isConnectModalOpen} closeModal={() => setIsConnectModalOpen(false)} />
+              </>
             )}
             
             <button className="md:hidden">
