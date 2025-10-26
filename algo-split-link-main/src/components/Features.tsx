@@ -4,7 +4,7 @@ import { Shield, Zap, Users, Lock, TrendingDown, Clock } from 'lucide-react';
 const features = [
   {
     icon: Shield,
-    title: 'Decentralized Smart Contracts',
+    title: 'Blockchain Secured',
     description: 'Your funds are secured by Algorand blockchain technology—no central authority needed.',
   },
   {
@@ -24,8 +24,8 @@ const features = [
   },
   {
     icon: Clock,
-    title: 'Auto-Distribution',
-    description: 'Funds automatically distributed to recipients once payment goals are met.',
+    title: 'Instant Payments',
+    description: 'Funds are sent directly to your wallet immediately, no waiting.',
   },
   {
     icon: Lock,
@@ -47,7 +47,7 @@ const Features = () => {
           <h2 className="text-4xl md:text-5xl font-bold">
             Why Choose{' '}
             <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              AlgoPayMe
+              AlgoSplit
             </span>
           </h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">

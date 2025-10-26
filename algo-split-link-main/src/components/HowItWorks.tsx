@@ -17,7 +17,7 @@ const steps = [
   {
     icon: CheckCircle,
     title: 'Get Paid Automatically',
-    description: 'Track contributions in real-time. Funds are released once the goal is reached.',
+    description: 'Track contributions in real-time. Funds are sent directly to your wallet with each payment.',
     color: 'from-accent to-primary',
   },
 ];
