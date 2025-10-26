@@ -8,7 +8,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="space-y-4">
             <h3 className="text-lg font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              AlgoPayMe
+              AlgoSplit
             </h3>
             <p className="text-sm text-muted-foreground">
               Built on Algorand. Designed for simplicity.
@@ -83,7 +83,7 @@ const Footer = () => {
         </div>
 
         <div className="mt-12 pt-8 border-t text-center text-sm text-muted-foreground">
-          <p>© 2025 AlgoPayMe. Built with ❤️ on Algorand.</p>
+          <p>© 2025 AlgoSplit. Built with ❤️ on Algorand.</p>
         </div>
       </div>
     </footer>
