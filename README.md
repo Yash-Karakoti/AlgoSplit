@@ -8,14 +8,14 @@ AlgoSplit is a consumer app on Algorand that makes splitting payments and shared
 
 ## Features
 
-- 💰 **ALGO Payments** - Fast and secure blockchain payments
-- 🔗 **Shareable Links** - Easy payment link sharing across any device
-- 👥 **Multi-participant Support** - Split bills between any number of people
-- 🔐 **Secure** - Built on Algorand blockchain with Supabase backend
-- 🎨 **Beautiful UI** - Modern, responsive design
-- 🔌 **Multiple Wallets** - Support for Pera, Defly, and Lute wallets
-- 📊 **Payment History** - Track your created and contributed payments
-- ✅ **Auto-Completion** - Payment links stop accepting when target is reached
+-  **ALGO Payments** - Fast and secure blockchain payments
+-  **Shareable Links** - Easy payment link sharing across any device
+-  **Multi participant Support** - Split bills between any number of people
+-  **Secure** - Built on Algorand blockchain with Supabase backend
+-  **Beautiful UI** - Modern, responsive design
+-  **Multiple Wallets** - Support for Pera, Defly, and Lute wallets
+-  **Payment History** - Track your created and contributed payments
+-  **Auto Completion** - Payment links stop accepting when target is reached
 
 ## How It Works
 
