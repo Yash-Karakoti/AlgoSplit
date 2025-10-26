@@ -1,5 +1,7 @@
 # AlgoSplit
 
+LIVE LINK: https://algosplit.vercel.app/
+
 **Split payments effortlessly on Algorand using ALGO**
 
 AlgoSplit is a consumer app on Algorand that makes splitting payments and shared bills effortless. Create payment links that your friends or family can click and pay their share using ALGO.
