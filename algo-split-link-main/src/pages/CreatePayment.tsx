@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Navbar from '@/components/Navbar';
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usePayment } from '@/contexts/PaymentContext';
-import { useWallet } from '@/contexts/WalletContext';
+import { useWallet } from '@txnlab/use-wallet-react';
 import { Card } from '@/components/ui/card';
 import { Calendar, DollarSign, Users, Wallet, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -17,7 +17,10 @@ import toast from 'react-hot-toast';
 const CreatePayment = () => {
   const navigate = useNavigate();
   const { createPayment } = usePayment();
-  const { isConnected, walletAddress } = useWallet();
+  const { activeAddress } = useWallet();
+  
+  const walletAddress = activeAddress || '';
+  const isConnected = !!activeAddress;
   
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -26,9 +29,16 @@ const CreatePayment = () => {
     totalAmount: '',
     currency: 'ALGO',
     participants: '',
-    receiverAddress: walletAddress || '',
+    receiverAddress: '',
     expiryDate: '',
   });
+
+  // Update receiverAddress when wallet connects
+  useEffect(() => {
+    if (activeAddress) {
+      setFormData(prev => ({ ...prev, receiverAddress: activeAddress }));
+    }
+  }, [activeAddress]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,9 +55,8 @@ const CreatePayment = () => {
 
     setIsLoading(true);
     
-    // Simulate smart contract creation
-    setTimeout(() => {
-      const paymentId = createPayment({
+    try {
+      const paymentId = await createPayment({
         title: formData.title,
         description: formData.description,
         totalAmount: parseFloat(formData.totalAmount),
@@ -57,10 +66,14 @@ const CreatePayment = () => {
         expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : undefined,
       });
       
-      setIsLoading(false);
       toast.success('Payment link created successfully!');
       navigate(`/payment/${paymentId}`);
-    }, 2000);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create payment link');
+      console.error('Error creating payment:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleInputChange = (field: string, value: string) => {
