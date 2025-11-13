@@ -61,7 +61,7 @@ const Footer = () => {
             <h4 className="font-semibold">Connect</h4>
             <div className="flex space-x-4">
               <a
-                href="#"
+                href="https://github.com/Yash-Karakoti/AlgoSplit"
                 className="w-10 h-10 rounded-lg bg-muted hover:bg-primary/10 flex items-center justify-center transition-smooth hover-lift"
               >
                 <Github className="w-5 h-5" />

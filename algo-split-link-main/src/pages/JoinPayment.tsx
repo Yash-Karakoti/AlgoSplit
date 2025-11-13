@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { usePayment } from '@/contexts/PaymentContext';
 import { useWallet } from '@txnlab/use-wallet-react';
-import { supabase } from '@/lib/supabase/config';
+import { supabase, isSupabaseReady } from '@/lib/supabase/config';
 import { CheckCircle, Clock, User, Loader2, ExternalLink, Trophy } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -29,7 +29,7 @@ const JoinPayment = () => {
   const loadPaymentData = async () => {
     try {
       // Check if Supabase is configured
-      if (supabase && import.meta.env.VITE_SUPABASE_URL) {
+      if (isSupabaseReady) {
         console.log('Loading payment from Supabase with id:', id);
         const { data, error } = await supabase
           .from('payments')

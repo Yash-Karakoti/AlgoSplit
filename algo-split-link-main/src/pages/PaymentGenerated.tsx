@@ -174,23 +174,36 @@ const PaymentGenerated = () => {
               <h3 className="font-semibold">Transaction Details</h3>
               
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Smart Contract</span>
-                  <span className="font-mono">{payment.contractAddress}</span>
-                </div>
+                {payment.contractAppId && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Smart Contract App ID</span>
+                    <span className="font-mono">{payment.contractAppId}</span>
+                  </div>
+                )}
                 
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Transaction Hash</span>
-                  <a
-                    href={`https://lora.algokit.io/testnet/transaction/${payment.txHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-primary hover:underline flex items-center"
-                  >
-                    {payment.txHash?.slice(0, 10)}...
-                    <ExternalLink className="w-3 h-3 ml-1" />
-                  </a>
-                </div>
+                {payment.contractAddress && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Contract Address</span>
+                    <span className="font-mono text-xs">
+                      {payment.contractAddress.slice(0, 8)}...{payment.contractAddress.slice(-6)}
+                    </span>
+                  </div>
+                )}
+                
+                {payment.txHash && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Transaction Hash</span>
+                    <a
+                      href={`https://lora.algokit.io/testnet/transaction/${payment.txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-primary hover:underline flex items-center"
+                    >
+                      {payment.txHash?.slice(0, 10)}...
+                      <ExternalLink className="w-3 h-3 ml-1" />
+                    </a>
+                  </div>
+                )}
                 
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Receiver</span>

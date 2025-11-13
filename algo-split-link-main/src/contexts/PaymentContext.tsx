@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useWallet } from '@txnlab/use-wallet-react';
 import algosdk from 'algosdk';
-import { supabase } from '@/lib/supabase/config';
+import { supabase, isSupabaseReady } from '@/lib/supabase/config';
+import { contractService, PaymentContract } from '@/lib/algorand/contractService';
+import { PAYMENT_APP_ID } from '@/lib/algorand/config';
 
 export interface Payment {
   id: string;
@@ -17,6 +19,8 @@ export interface Payment {
   contributors: Contributor[];
   status: 'active' | 'completed';
   txHash?: string;
+  contractAppId?: number; // Smart contract app ID if using contracts
+  contractAddress?: string; // Smart contract address
 }
 
 export interface Contributor {
@@ -44,8 +48,8 @@ export const PaymentProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const loadPayments = async () => {
     try {
-      // Check if Supabase is configured
-      if (!supabase || !import.meta.env.VITE_SUPABASE_URL) {
+      // Check if Supabase is configured and ready
+      if (!isSupabaseReady) {
         // Fall back to localStorage if Supabase not configured
         const stored = localStorage.getItem('algoPayMe_payments');
         if (stored) {
@@ -77,7 +81,28 @@ export const PaymentProvider: React.FC<{ children: ReactNode }> = ({ children })
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading payments from Supabase:', error);
+        console.warn('Error loading payments from Supabase, falling back to localStorage:', error);
+        // Fall back to localStorage
+        const stored = localStorage.getItem('algoPayMe_payments');
+        if (stored) {
+          const allPayments = JSON.parse(stored);
+          const formattedPayments = Object.values(allPayments).map((details: any) => ({
+            id: details.payment.id,
+            title: details.payment.title,
+            description: details.payment.description,
+            totalAmount: details.payment.totalAmount,
+            currency: details.payment.currency,
+            participants: details.payment.participants,
+            receiverAddress: details.payment.receiverAddress,
+            createdAt: new Date(details.payment.createdAt),
+            expiryDate: details.payment.expiryDate ? new Date(details.payment.expiryDate) : undefined,
+            collected: details.collected || 0,
+            contributors: details.contributors || [],
+            status: details.status || 'active',
+            txHash: details.txHash,
+          }));
+          setPayments(formattedPayments);
+        }
         return;
       }
 
@@ -106,10 +131,48 @@ export const PaymentProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const createPayment = async (paymentData: Omit<Payment, 'id' | 'createdAt' | 'collected' | 'contributors' | 'status'>) => {
     try {
-      const id = Math.random().toString(36).substring(2, 15);
+      let id: string;
+      let contractAppId: number | undefined;
+      let contractAddress: string | undefined;
+      let txHash: string | undefined;
+
+      // Check if smart contract is configured
+      if (PAYMENT_APP_ID && activeAddress && transactionSigner) {
+        try {
+          const contract: PaymentContract = {
+            appId: PAYMENT_APP_ID,
+            appAddress: algosdk.getApplicationAddress(PAYMENT_APP_ID),
+          };
+
+          // Create payment via smart contract
+          const paymentId = await contractService.createPayment(
+            contract,
+            paymentData.receiverAddress,
+            paymentData.totalAmount,
+            paymentData.participants,
+            paymentData.title,
+            paymentData.description || '',
+            activeAddress,
+            transactionSigner
+          );
+
+          id = paymentId;
+          contractAppId = PAYMENT_APP_ID;
+          contractAddress = contract.appAddress;
+          txHash = paymentId; // Payment ID is the transaction ID
+        } catch (contractError) {
+          console.warn('Smart contract creation failed, falling back to direct payment:', contractError);
+          // Fall through to direct payment creation
+        }
+      }
+
+      // If contract creation failed or not configured, use direct payment
+      if (!id) {
+        id = Math.random().toString(36).substring(2, 15);
+      }
       
       // Check if Supabase is configured
-      if (!supabase || !import.meta.env.VITE_SUPABASE_URL) {
+      if (!isSupabaseReady) {
         // Fall back to localStorage
         const stored = localStorage.getItem('algoPayMe_payments');
         const payments = stored ? JSON.parse(stored) : {};
@@ -119,6 +182,9 @@ export const PaymentProvider: React.FC<{ children: ReactNode }> = ({ children })
             ...paymentData,
             id,
             createdAt: new Date(),
+            contractAppId,
+            contractAddress,
+            txHash,
           },
           collected: 0,
           contributors: [],
@@ -130,29 +196,56 @@ export const PaymentProvider: React.FC<{ children: ReactNode }> = ({ children })
         return id;
       }
 
-      // Save to Supabase
-      const { error } = await supabase
-        .from('payments')
-        .insert({
-          id,
-          title: paymentData.title,
-          description: paymentData.description,
-          total_amount: paymentData.totalAmount,
-          currency: paymentData.currency,
-          participants: paymentData.participants,
-          receiver_address: paymentData.receiverAddress,
-          created_at: new Date().toISOString(),
-          expiry_date: paymentData.expiryDate ? paymentData.expiryDate.toISOString() : null,
-          collected: 0,
-          contributors: [],
-          status: 'active',
-        });
+      // Try to save to Supabase, but fall back to localStorage if it fails
+      if (isSupabaseReady) {
+        const { error } = await supabase
+          .from('payments')
+          .insert({
+            id,
+            title: paymentData.title,
+            description: paymentData.description,
+            total_amount: paymentData.totalAmount,
+            currency: paymentData.currency,
+            participants: paymentData.participants,
+            receiver_address: paymentData.receiverAddress,
+            created_at: new Date().toISOString(),
+            expiry_date: paymentData.expiryDate ? paymentData.expiryDate.toISOString() : null,
+            collected: 0,
+            contributors: [],
+            status: 'active',
+            contract_app_id: contractAppId,
+            contract_address: contractAddress,
+            tx_hash: txHash,
+          });
 
-      if (error) {
-        console.error('Error creating payment in Supabase:', error);
-        throw error;
+        if (error) {
+          console.warn('Error creating payment in Supabase, falling back to localStorage:', error);
+          // Fall through to localStorage save
+        } else {
+          await loadPayments();
+          return id;
+        }
       }
 
+      // Fall back to localStorage if Supabase not configured or failed
+      const stored = localStorage.getItem('algoPayMe_payments');
+      const payments = stored ? JSON.parse(stored) : {};
+      
+      payments[id] = {
+        payment: {
+          ...paymentData,
+          id,
+          createdAt: new Date(),
+          contractAppId,
+          contractAddress,
+          txHash,
+        },
+        collected: 0,
+        contributors: [],
+        status: 'active',
+      };
+      
+      localStorage.setItem('algoPayMe_payments', JSON.stringify(payments));
       await loadPayments();
       return id;
     } catch (error) {
@@ -239,37 +332,64 @@ export const PaymentProvider: React.FC<{ children: ReactNode }> = ({ children })
         throw new Error('Payment receiver address is missing');
       }
       
-      // Direct Algorand payment using TxnLab SDK
-      const ALGOD_SERVER = 'https://testnet-api.algonode.cloud';
-      const ALGOD_PORT = '443';
-      const ALGOD_TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-      const algod = new algosdk.Algodv2(ALGOD_TOKEN, ALGOD_SERVER, ALGOD_PORT);
+      let txHash: string;
       
-      // Get transaction parameters
-      const suggestedParams = await algod.getTransactionParams().do();
-      
-      // Create payment transaction
-      const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        sender: contributorAddress,
-        receiver: payment.receiverAddress,
-        amount: Math.floor(amount * 1_000_000), // Convert ALGO to microAlgos
-        suggestedParams
-      });
-      
-      // Sign transaction using TxnLab SDK (works with all wallets)
-      const signedTxns = await transactionSigner([txn], [0]);
-      
-      if (!signedTxns || signedTxns.length === 0 || !signedTxns[0]) {
-        throw new Error('Transaction not signed');
+      // Check if payment uses smart contract
+      if (payment.contractAppId && PAYMENT_APP_ID && transactionSigner) {
+        try {
+          const contract: PaymentContract = {
+            appId: payment.contractAppId,
+            appAddress: payment.contractAddress || algosdk.getApplicationAddress(payment.contractAppId),
+          };
+          
+          // Contribute via smart contract
+          txHash = await contractService.contribute(
+            contract,
+            id,
+            amount,
+            contributorAddress,
+            transactionSigner
+          );
+        } catch (contractError) {
+          console.warn('Smart contract contribution failed, falling back to direct payment:', contractError);
+          // Fall through to direct payment
+        }
       }
       
-      // Send transaction
-      const response = await algod.sendRawTransaction(signedTxns[0]).do();
-      
-      // Wait for confirmation
-      await algosdk.waitForConfirmation(algod, response.txid, 4);
-      
-      const txHash = response.txid;
+      // If contract contribution failed or not configured, use direct payment
+      if (!txHash) {
+        // Direct Algorand payment using TxnLab SDK
+        const ALGOD_SERVER = 'https://testnet-api.algonode.cloud';
+        const ALGOD_PORT = '443';
+        const ALGOD_TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        const algod = new algosdk.Algodv2(ALGOD_TOKEN, ALGOD_SERVER, ALGOD_PORT);
+        
+        // Get transaction parameters
+        const suggestedParams = await algod.getTransactionParams().do();
+        
+        // Create payment transaction
+        const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+          sender: contributorAddress,
+          receiver: payment.receiverAddress,
+          amount: Math.floor(amount * 1_000_000), // Convert ALGO to microAlgos
+          suggestedParams
+        });
+        
+        // Sign transaction using TxnLab SDK (works with all wallets)
+        const signedTxns = await transactionSigner([txn], [0]);
+        
+        if (!signedTxns || signedTxns.length === 0 || !signedTxns[0]) {
+          throw new Error('Transaction not signed');
+        }
+        
+        // Send transaction
+        const response = await algod.sendRawTransaction(signedTxns[0]).do();
+        
+        // Wait for confirmation
+        await algosdk.waitForConfirmation(algod, response.txid, 4);
+        
+        txHash = response.txid;
+      }
       
       // Update payment in Supabase or localStorage
       if (!supabase || !import.meta.env.VITE_SUPABASE_URL) {

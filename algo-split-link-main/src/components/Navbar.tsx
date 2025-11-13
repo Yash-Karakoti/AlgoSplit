@@ -44,7 +44,10 @@ const Navbar = () => {
 
           <div className="hidden md:flex items-center space-x-6">
             <Link to="/create" className="text-foreground hover:text-primary transition-smooth">
-              Create Payment
+              Split Payment
+            </Link>
+            <Link to="/create-claim" className="text-foreground hover:text-primary transition-smooth">
+              Claim Link
             </Link>
             {isConnected && (
               <Link to="/my-payments" className="text-foreground hover:text-primary transition-smooth">

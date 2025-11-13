@@ -102,11 +102,11 @@ const HeroSection = () => {
             className="grid grid-cols-3 gap-8 pt-12 max-w-2xl mx-auto"
           >
             <div className="space-y-1">
-              <div className="text-3xl font-bold text-primary">$2.5M+</div>
+              <div className="text-3xl font-bold text-primary">NaN</div>
               <div className="text-sm text-muted-foreground">Total Split</div>
             </div>
             <div className="space-y-1">
-              <div className="text-3xl font-bold text-primary">50K+</div>
+              <div className="text-3xl font-bold text-primary">NaN</div>
               <div className="text-sm text-muted-foreground">Users</div>
             </div>
             <div className="space-y-1">

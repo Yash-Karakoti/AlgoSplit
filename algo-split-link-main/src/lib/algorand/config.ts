@@ -25,5 +25,16 @@ export const USDC_ASSET_ID = {
 export const MIN_BALANCE = 100000; // 0.1 ALGO
 
 // App call parameter encoding
-export const PAYMENT_APP_ID = 1; // This will be dynamically set when we deploy the smart contract
+// Set this after deploying the contract via contracts/deploy.py
+export const PAYMENT_APP_ID = import.meta.env.VITE_PAYMENT_APP_ID 
+  ? parseInt(import.meta.env.VITE_PAYMENT_APP_ID) 
+  : undefined;
+
+// Escrow Claim Link App ID
+// Set this after deploying the escrow contract via contracts/deploy_escrow.py
+export const CLAIM_APP_ID = import.meta.env.VITE_CLAIM_APP_ID 
+  ? parseInt(import.meta.env.VITE_CLAIM_APP_ID) 
+  : undefined;
+
+export const CLAIM_APP_ADDRESS = import.meta.env.VITE_CLAIM_APP_ADDRESS || undefined;
 
