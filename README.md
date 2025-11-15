@@ -1,10 +1,20 @@
 # AlgoSplit
 
-LIVE LINK: https://algosplit.vercel.app/
+## 📄 Overview
 
-**Split payments effortlessly on Algorand using ALGO**
+AlgoSplit is a decentralized payment splitting and funding application built on the Algorand blockchain. It enables users to effortlessly split bills or send & receive payments by creating shareable payment links. Friends and family can contribute or claim their portion using ALGO or USDCa directly through their Algorand wallets with funds automatically distributed to the receiver once the payment target is reached.
 
-AlgoSplit is a consumer app on Algorand that makes splitting payments and shared bills effortless. Create payment links that your friends or family can click and pay their share using ALGO.
+The Claim link Function Uses Smart contract escrow which holds the funds sent by the sender and releases when receiver claims !
+
+**Key Features:**
+- Split payments between multiple participants
+- Create escrow-based claim links for one-time payments
+- Support for ALGO and USDCa (ASA) tokens
+- Secure smart contract escrow system
+- Beautiful, modern UI with wallet integration
+- Real-time payment tracking and history
+
+🌐 **Live Application:** [https://algosplit.vercel.app/](https://algosplit.vercel.app/)
 
 ## Features
 
@@ -32,15 +42,17 @@ If you create a payment link for 100 ALGO split between 5 people:
 - After 5 payments, the link stops working (status: completed)
 - Funds go directly to the specified receiver address
 
-## Getting Started
+## ⚙️ Setup & Installation
 
 ### Prerequisites
 
-- Node.js 18+ 
-- npm or yarn
-- Algorand wallet (Pera, Defly, or Exodus)
+- **Node.js** 18+ 
+- **npm** or **yarn**
+- **Python** 3.10+ (for smart contract development)
+- **Algorand wallet** (Pera, Defly, or Lute)
+- **Supabase account** (for backend database)
 
-### Installation
+### Frontend Installation
 
 ```bash
 # Clone the repository
@@ -56,23 +68,67 @@ npm install
 npm run dev
 ```
 
-### Environment Setup
+### Smart Contract Setup
+
+For deploying and working with smart contracts:
+
+```bash
+# Navigate to contracts directory
+cd contracts
+
+# Create virtual environment (Windows)
+python -m venv venv
+venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install PuyaPy compiler
+pip install puya
+```
+
+### Environment Configuration
 
 Create a `.env` file in the project root:
 
 ```env
+# Supabase Configuration (REQUIRED)
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Algorand Network (REQUIRED)
 VITE_ALGORAND_NETWORK=testnet
+
+# Smart Contract Configuration (OPTIONAL - only if using Claim Links)
+# These are automatically set when you run: python contracts/deploy_teal_escrow.py
+# Or manually add them after deploying:
+VITE_CLAIM_APP_ID=12345678                    # Numeric ID from deployment (e.g., 12345678)
+VITE_CLAIM_APP_ADDRESS=ABC123...XYZ789       # 58-character Algorand address
+
+# Payment Split Contract (OPTIONAL - for future use)
+VITE_PAYMENT_APP_ID=your_payment_contract_app_id
 ```
 
-Get your Supabase credentials:
+**What to enter for each variable:**
+
+| Variable | What to Enter | Example | Required? |
+|----------|---------------|---------|-----------|
+| `VITE_SUPABASE_URL` | Your Supabase project URL | `https://xxxxx.supabase.co` | ✅ Yes |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon/public key | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | ✅ Yes |
+| `VITE_ALGORAND_NETWORK` | Network name | `testnet` or `mainnet` | ✅ Yes |
+| `VITE_CLAIM_APP_ID` | Numeric application ID | `12345678` | ❌ Only for Claim Links |
+| `VITE_CLAIM_APP_ADDRESS` | 58-char Algorand address | `ABC123...XYZ789` | ❌ Only for Claim Links |
+| `VITE_PAYMENT_APP_ID` | Numeric application ID | `87654321` | ❌ Optional |
+
+> **💡 Tip:** The easiest way to get `VITE_CLAIM_APP_ID` and `VITE_CLAIM_APP_ADDRESS` is to run the deployment script - it will automatically add them to your `.env` file!
+
+**Setting up Supabase:**
 1. Sign up at [supabase.com](https://supabase.com)
 2. Create a new project
 3. Run the SQL from `supabase-schema.sql` in the SQL Editor
 4. Get your credentials from Settings → API
 
-For mainnet production:
+**For mainnet production:**
 ```env
 VITE_ALGORAND_NETWORK=mainnet
 ```
@@ -106,36 +162,197 @@ VITE_ALGORAND_NETWORK=mainnet
 4. Confirm the transaction in your wallet
 5. Wait for confirmation (usually 4-5 seconds)
 
-## Tech Stack
+## 🔗 Deployed Smart Contracts
 
-- **Frontend**: React + TypeScript + Vite
-- **UI**: Tailwind CSS + shadcn/ui
-- **Blockchain**: Algorand SDK (algosdk)
-- **Wallets**: Pera Wallet, Defly, Lute (via TxnLab SDK)
-- **Backend**: Supabase (PostgreSQL)
-- **State**: React Context API
+AlgoSplit uses smart contracts deployed on the Algorand TestNet. After deploying your contracts, you can verify them using [Lora Explorer](https://lora.algokit.io/testnet).
 
-## Project Structure
+### Understanding Contract IDs and Addresses
+
+**What are `VITE_CLAIM_APP_ID` and `VITE_CLAIM_APP_ADDRESS`?**
+
+When you deploy a smart contract to Algorand, it creates an **Application** on the blockchain. This application has:
+
+1. **Application ID (App ID)**: A unique numeric identifier assigned by Algorand (e.g., `12345678`)
+   - This is used to call the contract's methods
+   - Think of it as the contract's "phone number"
+
+2. **Application Address**: A unique Algorand address derived from the App ID (e.g., `ABC123...XYZ789`)
+   - This address can receive ALGO and assets
+   - Funds sent here are held in escrow by the smart contract
+   - Think of it as the contract's "bank account"
+
+**When do you need these values?**
+
+- ✅ **Required** if you want to use the **Claim Link** feature (escrow-based one-time payments)
+- ❌ **Optional** if you only want to use the **Payment Split** feature (multi-participant payments)
+
+### Step-by-Step: Getting Your Contract Values
+
+The deployment script automatically generates and saves these values:
+
+1. **Deploy the contract:**
+   ```bash
+   cd contracts
+   python deploy_teal_escrow.py
+   ```
+
+2. **The script will:**
+   - Deploy the contract to Algorand TestNet
+   - Generate the App ID and Address
+   - **Automatically update your `.env` file** with:
+     ```
+     VITE_CLAIM_APP_ID=12345678
+     VITE_CLAIM_APP_ADDRESS=ABC123...XYZ789
+     ```
+   - Show you the explorer link to verify
+
+3. **Restart your dev server:**
+   ```bash
+   # Stop the server (Ctrl+C)
+   npm run dev
+   ```
+
+### Deploying Contracts
+
+**Escrow Claim Link Contract:**
+```bash
+cd contracts
+python deploy_teal_escrow.py
+```
+
+After deployment, the script will output:
+- **Application ID** (e.g., `12345678`) → This goes in `VITE_CLAIM_APP_ID`
+- **Contract Address** (e.g., `ABC123...XYZ789`) → This goes in `VITE_CLAIM_APP_ADDRESS`
+- **Explorer link** (e.g., `https://lora.algokit.io/testnet/application/12345678`)
+
+**Payment Split Contract:**
+```bash
+cd contracts
+python deploy.py  # (if available)
+```
+
+### Deployed Smart Contracts on Algorand TestNet
+
+[lora.algokit.io/testnet](https://lora.algokit.io/testnet) to show and verify our deployed contract or asset links on the Algorand TestNet.
+
+**Escrow Claim Link Contract:**
+- **Application ID:** `749648130`
+- **Contract Address:** [View on Lora](https://lora.algokit.io/testnet/account/SPVG6DQRDUJPERURDXWO7HCKVCRDSUABA22NILY5TLJYO27ES2L767AI24)`
+- **Lora Explorer:** [View on Lora](https://lora.algokit.io/testnet/application/749648130)
+
+> **Example:** If your `VITE_CLAIM_APP_ID=12345678`, your verification link would be:
+> `https://lora.algokit.io/testnet/application/12345678`
+
+### Contract Features
+
+**Escrow Claim Link Contract (`escrow_claim_link.py`):**
+- Pre-funded escrow system
+- One-time claim links
+- Optional receiver restrictions
+- Expiry enforcement
+- Cancel/refund functionality
+- Support for ALGO and ASA tokens
+
+**Payment Split Contract (`payment_split.py`):**
+- Multi-participant payment splitting
+- Automatic completion when target reached
+- Duplicate contribution prevention
+- Real-time balance tracking
+
+## 🧠 Architecture & Components
+
+### System Architecture
+
+AlgoSplit follows a **decentralized architecture** with the following components:
 
 ```
-src/
-├── components/        # React components
-│   ├── ui/            # shadcn/ui components
-│   └── ConnectWallet.tsx
-├── contexts/          # React contexts
-│   └── PaymentContext.tsx
-├── lib/
-│   ├── algorand/      # Algorand integration
-│   │   ├── config.ts
-│   │   └── simplePayment.ts
-│   └── supabase/      # Supabase integration
-│       └── config.ts
-└── pages/             # Page components
-    ├── Landing.tsx
-    ├── CreatePayment.tsx
-    ├── JoinPayment.tsx
-    ├── PaymentGenerated.tsx
-    └── MyPayments.tsx
+┌─────────────────┐
+│   Frontend      │  React + TypeScript + Vite
+│   (Vercel)      │  └─ Wallet Integration (Pera/Defly/Lute)
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │         │
+┌───▼───┐ ┌──▼────────┐
+│Algorand│ │ Supabase │
+│Blockchain│ │Database │
+│         │ │          │
+│ Smart  │ │ Payment  │
+│Contracts│ │ History │
+└─────────┘ └──────────┘
+```
+
+### Frontend Components
+
+**Tech Stack:**
+- **Framework**: React 18 + TypeScript
+- **Build Tool**: Vite
+- **UI Library**: Tailwind CSS + shadcn/ui components
+- **State Management**: React Context API
+- **Routing**: React Router v6
+- **Wallet Integration**: @txnlab/use-wallet-react
+- **Blockchain SDK**: algosdk (Algorand SDK)
+
+**Key Components:**
+- `PaymentContext.tsx` - Manages payment splitting logic
+- `ClaimLinkContext.tsx` - Handles escrow claim link functionality
+- `ConnectWallet.tsx` - Wallet connection interface
+- `contractService.ts` - Smart contract interaction layer
+
+### Smart Contracts
+
+**Escrow Claim Link Contract** (`escrow_claim_link.py`):
+- Written in PuyaPy (Algorand Python)
+- Uses box storage for claim link data
+- Methods: `create_claim_link`, `claim`, `cancel`, `get_claim_info`
+- Supports both ALGO and ASA (USDCa) tokens
+
+**Payment Split Contract** (`payment_split.py`):
+- Manages multi-participant payments
+- Tracks contributions and completion status
+- Methods: `create_payment`, `contribute`, `get_payment_info`, `has_contributed`
+
+### Backend
+
+**Supabase (PostgreSQL):**
+- Stores payment metadata and history
+- Row Level Security (RLS) for data protection
+- Real-time subscriptions for live updates
+- Tables: `payments`, `claim_links`, `contributions`
+
+### Project Structure
+
+```
+algo-split-link-main/
+├── src/
+│   ├── components/        # React UI components
+│   │   ├── ui/            # shadcn/ui components
+│   │   ├── ConnectWallet.tsx
+│   │   ├── Features.tsx
+│   │   └── Navbar.tsx
+│   ├── contexts/          # State management
+│   │   ├── PaymentContext.tsx
+│   │   └── ClaimLinkContext.tsx
+│   ├── lib/
+│   │   ├── algorand/      # Blockchain integration
+│   │   │   ├── config.ts
+│   │   │   ├── contractService.ts
+│   │   │   └── simplePayment.ts
+│   │   └── supabase/      # Database integration
+│   │       └── config.ts
+│   └── pages/             # Route pages
+│       ├── Landing.tsx
+│       ├── CreatePayment.tsx
+│       ├── CreateClaimLink.tsx
+│       ├── JoinPayment.tsx
+│       ├── ClaimLinkPage.tsx
+│       └── MyPayments.tsx
+├── contracts/             # Smart contracts
+│   ├── escrow_claim_link.py
+│   ├── payment_split.py
+│   ├── deploy_teal_escrow.py
+│   └── requirements.txt
+└── supabase-schema.sql    # Database schema
 ```
 
 ## Security
@@ -165,15 +382,31 @@ Contributions are welcome! Please open an issue or submit a pull request.
 
 MIT
 
-## Deploy
+## 🌐 Frontend Deployment
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
+The frontend is deployed on **Vercel** and accessible at:
 
-Quick deploy to Vercel:
+**🔗 Live Application:** [https://algosplit.vercel.app/](https://algosplit.vercel.app/)
+
+### Deploying to Vercel
+
+Quick deploy:
 ```bash
 npm install -g vercel
 vercel
 ```
+
+Or connect your GitHub repository to Vercel for automatic deployments.
+
+### Environment Variables on Vercel
+
+Make sure to set all environment variables in your Vercel project settings:
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_ALGORAND_NETWORK`
+- `VITE_PAYMENT_APP_ID` (if using payment split contract)
+- `VITE_CLAIM_APP_ID` (if using claim link contract)
+- `VITE_CLAIM_APP_ADDRESS` (if using claim link contract)
 
 ## Links
 
