@@ -3,6 +3,7 @@ import { useWallet } from '@txnlab/use-wallet-react';
 import algosdk from 'algosdk';
 import { supabase, isSupabaseReady } from '@/lib/supabase/config';
 import { escrowClaimService } from '@/lib/algorand/contractService';
+import { CLAIM_APP_ID, CLAIM_APP_ADDRESS } from '@/lib/algorand/config';
 import toast from 'react-hot-toast';
 
 export interface ClaimLink {
@@ -62,6 +63,8 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
             status: details.status || 'active',
             txHash: details.txHash,
             claimTxHash: details.claimTxHash,
+            contractAppId: details.contractAppId || details.claimLink.contractAppId,
+            contractAddress: details.contractAddress || details.claimLink.contractAddress,
           }));
           setClaimLinks(formattedClaimLinks);
         }
@@ -94,6 +97,8 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
             status: details.status || 'active',
             txHash: details.txHash,
             claimTxHash: details.claimTxHash,
+            contractAppId: details.contractAppId || details.claimLink.contractAppId,
+            contractAddress: details.contractAddress || details.claimLink.contractAddress,
           }));
           setClaimLinks(formattedClaimLinks);
         }
@@ -101,21 +106,23 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       if (data) {
-        const formattedClaimLinks = data.map((claimLink: any) => ({
-          id: claimLink.id,
-          senderAddress: claimLink.sender_address,
-          receiverAddress: claimLink.receiver_address,
-          amount: claimLink.amount,
-          currency: claimLink.currency,
-          createdAt: new Date(claimLink.created_at),
-          expiryDate: claimLink.expiry_date ? new Date(claimLink.expiry_date) : undefined,
-          claimed: claimLink.claimed || false,
-          claimedAt: claimLink.claimed_at ? new Date(claimLink.claimed_at) : undefined,
-          claimedBy: claimLink.claimed_by,
-          status: claimLink.status || 'active',
-          txHash: claimLink.tx_hash,
-          claimTxHash: claimLink.claim_tx_hash,
-        }));
+          const formattedClaimLinks = data.map((claimLink: any) => ({
+            id: claimLink.id,
+            senderAddress: claimLink.sender_address,
+            receiverAddress: claimLink.receiver_address,
+            amount: claimLink.amount,
+            currency: claimLink.currency,
+            createdAt: new Date(claimLink.created_at),
+            expiryDate: claimLink.expiry_date ? new Date(claimLink.expiry_date) : undefined,
+            claimed: claimLink.claimed || false,
+            claimedAt: claimLink.claimed_at ? new Date(claimLink.claimed_at) : undefined,
+            claimedBy: claimLink.claimed_by,
+            status: claimLink.status || 'active',
+            txHash: claimLink.tx_hash,
+            claimTxHash: claimLink.claim_tx_hash,
+            contractAppId: claimLink.contract_app_id,
+            contractAddress: claimLink.contract_address,
+          }));
         setClaimLinks(formattedClaimLinks);
       }
     } catch (error) {
@@ -137,25 +144,38 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Try to use escrow contract if configured
       if (escrowClaimService.isConfigured() && transactionSigner) {
         try {
+          // For the simplified contract, just send ALGO directly to contract
+          // This is a workaround until full contract is deployed
           const expiryTime = claimLinkData.expiryDate 
             ? Math.floor(claimLinkData.expiryDate.getTime() / 1000) 
             : 0;
 
-          const result = await escrowClaimService.createClaimLink(
-            activeAddress,
-            claimLinkData.amount,
-            claimLinkData.currency as 'ALGO' | 'USDC',
-            claimLinkData.receiverAddress || null,
-            expiryTime,
-            transactionSigner
-          );
-
-          txHash = result.txId;
-          contractAppId = result.claimId; // Store claim ID as app ID for reference
+          // Send ALGO to contract as escrow
+          const ALGOD_SERVER = 'https://testnet-api.algonode.cloud';
+          const algod = new algosdk.Algodv2('', ALGOD_SERVER, '');
+          const suggestedParams = await algod.getTransactionParams().do();
           
-          toast.success('Claim link created and escrowed on-chain! 🎉');
+          const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+            sender: activeAddress,
+            receiver: escrowClaimService['appAddress'] as string,
+            amount: Math.floor(claimLinkData.amount * 1_000_000),
+            note: new Uint8Array(Buffer.from(`claim_link:${id}`)),
+            suggestedParams
+          });
+
+          const signedTxns = await transactionSigner([txn], [0]);
+          const response = await algod.sendRawTransaction(signedTxns[0]).do();
+          await algosdk.waitForConfirmation(algod, response.txid, 4);
+          
+          txHash = response.txid;
+          // Use contract from config (from .env)
+          contractAppId = CLAIM_APP_ID;
+          contractAddress = CLAIM_APP_ADDRESS;
+          
+          console.log('✅ Escrow funded:', { txHash, contractAppId, contractAddress });
+          toast.success('Claim link created and funds escrowed! 🎉');
         } catch (escrowError: any) {
-          console.warn('Escrow contract creation failed, falling back to direct payment:', escrowError);
+          console.warn('Escrow contract creation failed:', escrowError);
           toast.error('Escrow failed: ' + (escrowError.message || 'Unknown error'));
           throw escrowError;
         }
@@ -199,11 +219,13 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
       const stored = localStorage.getItem('algoPayMe_claimLinks');
       const claimLinks = stored ? JSON.parse(stored) : {};
       
-      claimLinks[id] = {
+      const newClaimLink = {
         claimLink: {
           ...claimLinkData,
           id,
           createdAt: new Date(),
+          contractAppId,
+          contractAddress,
         },
         claimed: false,
         status: 'active',
@@ -211,6 +233,9 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
         contractAppId,
         contractAddress,
       };
+      
+      claimLinks[id] = newClaimLink;
+      console.log('Saving to localStorage:', { id, contractAppId, contractAddress });
       
       localStorage.setItem('algoPayMe_claimLinks', JSON.stringify(claimLinks));
       await loadClaimLinks();
@@ -233,7 +258,7 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
         const claimLinkData = allClaimLinks[id];
         
         if (claimLinkData) {
-          return {
+          const loadedLink = {
             id: claimLinkData.claimLink.id,
             senderAddress: claimLinkData.claimLink.senderAddress,
             receiverAddress: claimLinkData.claimLink.receiverAddress,
@@ -247,7 +272,11 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
             status: claimLinkData.status || 'active',
             txHash: claimLinkData.txHash,
             claimTxHash: claimLinkData.claimTxHash,
+            contractAppId: claimLinkData.contractAppId || claimLinkData.claimLink.contractAppId,
+            contractAddress: claimLinkData.contractAddress || claimLinkData.claimLink.contractAddress,
           };
+          console.log('Loaded from localStorage:', { id, contractAppId: loadedLink.contractAppId });
+          return loadedLink;
         }
       }
     } catch (error) {
@@ -259,105 +288,186 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const claimLink = async (id: string, claimerAddress?: string): Promise<string> => {
     try {
+      console.log('claimLink called with:', { id, claimerAddress, activeAddress, transactionSigner: !!transactionSigner });
+      
       const claimer = activeAddress || claimerAddress;
       
       if (!claimer) {
+        console.error('No claimer address available!', { activeAddress, claimerAddress });
         throw new Error('Please connect your wallet first');
       }
+      
+      if (!transactionSigner) {
+        console.error('No transaction signer available!');
+        throw new Error('Wallet not properly connected. Please reconnect your wallet.');
+      }
+      
+      console.log('✅ Claimer address:', claimer);
 
-      const claimLink = getClaimLink(id);
-      if (!claimLink) {
+      const linkData = getClaimLink(id);
+      console.log('Found claim link:', linkData);
+      
+      if (!linkData) {
         throw new Error('Claim link not found');
       }
 
-      if (claimLink.claimed || claimLink.status === 'claimed') {
+      if (linkData.claimed || linkData.status === 'claimed') {
         throw new Error('This claim link has already been claimed');
       }
 
-      if (claimLink.status !== 'active') {
+      if (linkData.status !== 'active') {
         throw new Error('This claim link is not active');
       }
 
       // Check expiry
-      if (claimLink.expiryDate && new Date(claimLink.expiryDate) < new Date()) {
+      if (linkData.expiryDate && new Date(linkData.expiryDate) < new Date()) {
         throw new Error('This claim link has expired');
       }
-
+      console.log('linkData.receiverAddress:', linkData.receiverAddress);
       // Check if receiver is specified
-      if (claimLink.receiverAddress && claimLink.receiverAddress !== claimer) {
+      if (linkData.receiverAddress && linkData.receiverAddress !== claimer) {
         throw new Error('Only the specified receiver can claim this link');
       }
 
       // Check if sender is trying to claim
-      if (claimLink.senderAddress === claimer) {
+      if (linkData.senderAddress === claimer) {
         throw new Error('Sender cannot claim their own link');
       }
 
-      // Try to use escrow contract if available
-      if (escrowClaimService.isConfigured() && claimLink.contractAppId && transactionSigner) {
-        try {
-          const claimTxId = await escrowClaimService.claim(
-            claimLink.contractAppId,
-            claimer,
-            transactionSigner
-          );
+      // Debug logging
+      console.log('Claim attempt:', {
+        isConfigured: escrowClaimService.isConfigured(),
+        contractAppId: linkData.contractAppId,
+        hasTransactionSigner: !!transactionSigner,
+        claimerAddress: claimer
+      });
 
-          // Update claim status
-          await updateClaimStatus(id, claimer, claimTxId);
+      // Claim from TEAL escrow contract
+      if (escrowClaimService.isConfigured() && linkData.contractAppId && transactionSigner) {
+        try {
+          toast('📡 Processing claim transaction...', { icon: '⏳' });
           
-          toast.success('Successfully claimed from escrow! 🎉');
-          return claimTxId;
+          const ALGOD_SERVER = 'https://testnet-api.algonode.cloud';
+          const algod = new algosdk.Algodv2('', ALGOD_SERVER, '');
+          const suggestedParams = await algod.getTransactionParams().do();
+          
+          // Create app call transaction to claim funds
+          console.log('Creating claim transaction:', {
+            claimer,
+            contractAppId: linkData.contractAppId,
+            amount: linkData.amount,
+            claimerType: typeof claimer,
+            claimerLength: claimer?.length
+          });
+          
+          if (!claimer || typeof claimer !== 'string' || claimer.trim() === '') {
+            throw new Error('Claimer address is required and must be a valid string');
+          }
+          
+          // Validate address format
+          let claimerAddress: string = claimer.trim();
+          try {
+            // Validate by decoding the address
+            algosdk.decodeAddress(claimerAddress);
+            console.log('✅ Address validated:', claimerAddress);
+          } catch (addrError) {
+            console.error('Invalid address format:', claimerAddress, addrError);
+            throw new Error('Invalid claimer address format: ' + claimerAddress);
+          }
+          
+          const encoder = new TextEncoder();
+          
+          console.log('Building transaction with:', {
+            sender: claimerAddress,
+            appIndex: linkData.contractAppId,
+            amount: linkData.amount
+          });
+          
+          // Check contract balance first
+          const appInfo = await algod.getApplicationByID(linkData.contractAppId).do();
+          const contractAddress = algosdk.getApplicationAddress(linkData.contractAppId);
+          const accountInfo = await algod.accountInformation(contractAddress).do();
+          // Convert BigInt to number for comparison
+          const contractBalance = Number(accountInfo.amount);
+          const amountMicroAlgos = Math.floor(linkData.amount * 1_000_000);
+          
+          console.log('Contract balance:', contractBalance / 1_000_000, 'ALGO');
+          console.log('Amount to claim:', amountMicroAlgos / 1_000_000, 'ALGO');
+          
+          if (contractBalance < amountMicroAlgos) {
+            throw new Error(`Contract has insufficient balance. Has ${contractBalance / 1_000_000} ALGO, needs ${amountMicroAlgos / 1_000_000} ALGO`);
+          }
+          
+          // Use makeApplicationCallTxnFromObject instead (more reliable)
+          // Convert amount to BigInt for encodeUint64
+          const txn = algosdk.makeApplicationCallTxnFromObject({
+            sender: claimerAddress,
+            appIndex: linkData.contractAppId,
+            onComplete: algosdk.OnApplicationComplete.NoOpOC,
+            appArgs: [
+              encoder.encode('claim'),
+              algosdk.encodeUint64(BigInt(amountMicroAlgos))
+            ],
+            suggestedParams: {
+              ...suggestedParams,
+              fee: 2000, // Cover inner transaction fee
+              flatFee: true
+            }
+          });
+          
+          console.log('Transaction created successfully');
+          
+          // Sign and send
+          // transactionSigner from use-wallet-react expects (txns, indexesToSign)
+          const signedTxns = await transactionSigner([txn], [0]);
+          if (!signedTxns || signedTxns.length === 0 || !signedTxns[0]) {
+            throw new Error('Transaction not signed');
+          }
+          const response = await algod.sendRawTransaction(signedTxns[0]).do();
+          
+          console.log('Claim transaction sent:', response.txid);
+          
+          toast('⏳ Confirming transaction...');
+          
+          // Wait for confirmation
+          await algosdk.waitForConfirmation(algod, response.txid, 4);
+          
+          const claimTxHash = response.txid;
+          const explorerUrl = `https://testnet.explorer.perawallet.app/tx/${claimTxHash}`;
+          
+          // Update claim status
+          await updateClaimStatus(id, claimer, claimTxHash);
+          
+          toast.success(
+            `🎉 Successfully claimed! Funds transferred from escrow.\nView on AlgoExplorer: ${explorerUrl}`,
+            { 
+              duration: 10000,
+              icon: '✅'
+            }
+          );
+          
+          // Also show in console for easy copy
+          console.log('🎉 CLAIM SUCCESSFUL!');
+          console.log('Transaction Hash:', claimTxHash);
+          console.log('🔗 View on AlgoExplorer:', explorerUrl);
+          
+          return claimTxHash;
+          
         } catch (escrowError: any) {
           console.error('Escrow claim failed:', escrowError);
-          toast.error('Escrow claim failed: ' + (escrowError.message || 'Unknown error'));
+          toast.error('Claim failed: ' + (escrowError.message || 'Unknown error'));
           throw escrowError;
         }
       }
 
-      // Fallback: Direct payment (requires sender approval - not ideal for production)
-      console.warn('Escrow not available. Falling back to direct payment (requires sender approval).');
-      toast('⚠️ Claiming via direct payment. Sender must approve.', {
-        icon: '⚠️',
-        duration: 4000,
+      // Fallback: Show error if no escrow
+      console.error('Cannot claim: Escrow not properly configured', {
+        isConfigured: escrowClaimService.isConfigured(),
+        contractAppId: linkData.contractAppId,
+        hasTransactionSigner: !!transactionSigner
       });
-      
-      const ALGOD_SERVER = 'https://testnet-api.algonode.cloud';
-      const ALGOD_PORT = '443';
-      const ALGOD_TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-      const algod = new algosdk.Algodv2(ALGOD_TOKEN, ALGOD_SERVER, ALGOD_PORT);
-      
-      const suggestedParams = await algod.getTransactionParams().do();
-      
-      // Create payment transaction from sender to claimer
-      // NOTE: This requires the sender to sign, which is a limitation
-      // In production, use a smart contract escrow
-      const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        sender: claimLink.senderAddress,
-        receiver: claimer,
-        amount: Math.floor(claimLink.amount * 1_000_000), // Convert ALGO to microAlgos
-        suggestedParams
-      });
-
-      // Sign transaction using TxnLab SDK
-      // NOTE: This will fail if the sender's wallet is not connected
-      // In production, use a smart contract escrow where sender pre-funds
-      const signedTxns = await transactionSigner([txn], [0]);
-      
-      if (!signedTxns || signedTxns.length === 0 || !signedTxns[0]) {
-        throw new Error('Transaction not signed. In production, use a smart contract escrow where the sender pre-funds the link.');
-      }
-      
-      // Send transaction
-      const response = await algod.sendRawTransaction(signedTxns[0]).do();
-      
-      // Wait for confirmation
-      await algosdk.waitForConfirmation(algod, response.txid, 4);
-      
-      const claimTxHash = response.txid;
-
-      // Update claim status
-      await updateClaimStatus(id, claimer, claimTxHash);
-      return claimTxHash;
+      toast.error('⚠️ Cannot claim: Please restart the dev server to load escrow configuration.');
+      throw new Error('Escrow not available - dev server needs restart');
     } catch (error: any) {
       console.error('Error claiming link:', error);
       throw error;
@@ -426,10 +536,15 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Try to use escrow contract if available
       if (escrowClaimService.isConfigured() && claimLink.contractAppId && transactionSigner) {
         try {
+          // Wrap transactionSigner to match expected signature
+          const signer = async (txns: algosdk.Transaction[]) => {
+            return await transactionSigner(txns, txns.map((_, i) => i));
+          };
+          
           const cancelTxId = await escrowClaimService.cancel(
             claimLink.contractAppId,
             activeAddress,
-            transactionSigner
+            signer
           );
 
           // Update status in database
@@ -497,6 +612,7 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
 
 export const useClaimLink = () => {
   const context = useContext(ClaimLinkContext);
+  console.log('context:', context);
   if (context === undefined) {
     throw new Error('useClaimLink must be used within a ClaimLinkProvider');
   }

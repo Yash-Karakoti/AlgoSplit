@@ -274,7 +274,21 @@ export class EscrowClaimService {
   }
 
   isConfigured(): boolean {
-    return !!this.appId && !!this.appAddress;
+    const configured = !!this.appId && !!this.appAddress;
+    if (!configured) {
+      console.warn('EscrowClaimService not configured:', {
+        appId: this.appId,
+        appAddress: this.appAddress,
+        envAppId: import.meta.env.VITE_CLAIM_APP_ID,
+        envAppAddress: import.meta.env.VITE_CLAIM_APP_ADDRESS
+      });
+    } else {
+      console.log('✅ EscrowClaimService configured:', {
+        appId: this.appId,
+        appAddress: this.appAddress
+      });
+    }
+    return configured;
   }
 
   /**
