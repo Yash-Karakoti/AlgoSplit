@@ -231,7 +231,7 @@ cd contracts
 python deploy.py  # (if available)
 ```
 
-### Deployed Smart Contracts on Algorand TestNet
+### Our Deployed Smart Contracts on Algorand TestNet
 
 [lora.algokit.io/testnet](https://lora.algokit.io/testnet) to show and verify our deployed contract or asset links on the Algorand TestNet.
 
