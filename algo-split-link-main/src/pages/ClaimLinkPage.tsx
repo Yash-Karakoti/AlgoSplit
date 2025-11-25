@@ -13,20 +13,44 @@ import { ellipseAddress } from '@/lib/utils';
 
 const ClaimLinkPage = () => {
   const { id } = useParams<{ id: string }>();
-  const { getClaimLink, claimLink } = useClaimLink();
+  const { getClaimLink, fetchClaimLinkFromSupabase, claimLink } = useClaimLink();
   const { activeAddress } = useWallet();
   const isConnected = !!activeAddress;
   
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [claimLinkData, setClaimLinkData] = useState(() => getClaimLink(id!));
   
   useEffect(() => {
-    // Reload claim link data
-    const data = getClaimLink(id!);
-    if (data) {
-      setClaimLinkData(data);
-    }
+    const loadClaimLink = async () => {
+      // First try to get from state/localStorage
+      let data = getClaimLink(id!);
+      
+      // If not found, try fetching from Supabase
+      if (!data) {
+        setIsLoading(true);
+        data = await fetchClaimLinkFromSupabase(id!);
+      }
+      
+      if (data) {
+        setClaimLinkData(data);
+      }
+      setIsLoading(false);
+    };
+    
+    loadClaimLink();
   }, [id]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading claim link...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!claimLinkData) {
     return (

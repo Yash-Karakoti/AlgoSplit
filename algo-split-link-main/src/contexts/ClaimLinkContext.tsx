@@ -28,6 +28,7 @@ interface ClaimLinkContextType {
   claimLinks: ClaimLink[];
   createClaimLink: (claimLink: Omit<ClaimLink, 'id' | 'createdAt' | 'claimed' | 'status'>) => Promise<string>;
   getClaimLink: (id: string) => ClaimLink | undefined;
+  fetchClaimLinkFromSupabase: (id: string) => Promise<ClaimLink | undefined>;
   claimLink: (id: string, claimerAddress?: string) => Promise<string>;
   cancelClaimLink: (id: string) => Promise<void>;
 }
@@ -189,30 +190,46 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
       
       // Try to save to Supabase, but fall back to localStorage if it fails
       if (isSupabaseReady) {
-        const { error } = await supabase
+        const insertData = {
+          id,
+          sender_address: claimLinkData.senderAddress,
+          receiver_address: claimLinkData.receiverAddress || null,
+          amount: claimLinkData.amount,
+          currency: claimLinkData.currency,
+          created_at: new Date().toISOString(),
+          expiry_date: claimLinkData.expiryDate ? claimLinkData.expiryDate.toISOString() : null,
+          claimed: false,
+          status: 'active',
+          tx_hash: txHash || null,
+          contract_app_id: contractAppId || null,
+          contract_address: contractAddress || null,
+        };
+
+        console.log('Attempting to save claim link to Supabase:', { id, insertData });
+        
+        const { data, error } = await supabase
           .from('claim_links')
-          .insert({
-            id,
-            sender_address: claimLinkData.senderAddress,
-            receiver_address: claimLinkData.receiverAddress || null,
-            amount: claimLinkData.amount,
-            currency: claimLinkData.currency,
-            created_at: new Date().toISOString(),
-            expiry_date: claimLinkData.expiryDate ? claimLinkData.expiryDate.toISOString() : null,
-            claimed: false,
-            status: 'active',
-            tx_hash: txHash,
-            contract_app_id: contractAppId,
-            contract_address: contractAddress,
-          });
+          .insert(insertData)
+          .select()
+          .single();
 
         if (error) {
-          console.warn('Error creating claim link in Supabase, falling back to localStorage:', error);
+          console.error('Error creating claim link in Supabase:', error);
+          console.error('Error details:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+          });
+          console.warn('Falling back to localStorage');
           // Fall through to localStorage save
         } else {
+          console.log('✅ Claim link successfully saved to Supabase:', data);
           await loadClaimLinks();
           return id;
         }
+      } else {
+        console.warn('Supabase not ready, saving to localStorage only');
       }
 
       // Fall back to localStorage
@@ -283,6 +300,61 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.error('Error loading claim link from localStorage:', error);
     }
     
+    return undefined;
+  };
+
+  // Async function to fetch a claim link from Supabase if not found in state/localStorage
+  const fetchClaimLinkFromSupabase = async (id: string): Promise<ClaimLink | undefined> => {
+    if (!isSupabaseReady) {
+      return undefined;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('claim_links')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        console.warn('Error fetching claim link from Supabase:', error);
+        return undefined;
+      }
+
+      if (data) {
+        const formattedClaimLink: ClaimLink = {
+          id: data.id,
+          senderAddress: data.sender_address,
+          receiverAddress: data.receiver_address,
+          amount: data.amount,
+          currency: data.currency,
+          createdAt: new Date(data.created_at),
+          expiryDate: data.expiry_date ? new Date(data.expiry_date) : undefined,
+          claimed: data.claimed || false,
+          claimedAt: data.claimed_at ? new Date(data.claimed_at) : undefined,
+          claimedBy: data.claimed_by,
+          status: data.status || 'active',
+          txHash: data.tx_hash,
+          claimTxHash: data.claim_tx_hash,
+          contractAppId: data.contract_app_id,
+          contractAddress: data.contract_address,
+        };
+
+        // Add to state so it's available for future lookups
+        setClaimLinks((prev) => {
+          // Check if already exists to avoid duplicates
+          if (prev.find((cl) => cl.id === id)) {
+            return prev;
+          }
+          return [formattedClaimLink, ...prev];
+        });
+
+        return formattedClaimLink;
+      }
+    } catch (error) {
+      console.error('Error fetching claim link from Supabase:', error);
+    }
+
     return undefined;
   };
 
@@ -604,7 +676,7 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   return (
-    <ClaimLinkContext.Provider value={{ claimLinks, createClaimLink, getClaimLink, claimLink, cancelClaimLink }}>
+    <ClaimLinkContext.Provider value={{ claimLinks, createClaimLink, getClaimLink, fetchClaimLinkFromSupabase, claimLink, cancelClaimLink }}>
       {children}
     </ClaimLinkContext.Provider>
   );

@@ -8,23 +8,43 @@ import Footer from '@/components/Footer';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useClaimLink } from '@/contexts/ClaimLinkContext';
-import { CheckCircle, Copy, Share2, ExternalLink, QrCode } from 'lucide-react';
+import { CheckCircle, Copy, Share2, ExternalLink, QrCode, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ellipseAddress } from '@/lib/utils';
 
 const ClaimLinkGenerated = () => {
   const { id } = useParams<{ id: string }>();
-  const { getClaimLink } = useClaimLink();
+  const { getClaimLink, fetchClaimLinkFromSupabase } = useClaimLink();
   const [showConfetti, setShowConfetti] = useState(true);
   const [showQR, setShowQR] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [claimLink, setClaimLink] = useState(() => getClaimLink(id!));
   
-  const claimLink = getClaimLink(id!);
   const claimUrl = `${window.location.origin}/claim/${id}`;
 
   useEffect(() => {
     const timer = setTimeout(() => setShowConfetti(false), 5000);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const loadClaimLink = async () => {
+      // First try to get from state/localStorage
+      let data = getClaimLink(id!);
+      
+      // If not found, try fetching from Supabase
+      if (!data) {
+        data = await fetchClaimLinkFromSupabase(id!);
+      }
+      
+      if (data) {
+        setClaimLink(data);
+      }
+      setIsLoading(false);
+    };
+    
+    loadClaimLink();
+  }, [id]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(claimUrl);
@@ -46,6 +66,17 @@ const ClaimLinkGenerated = () => {
       copyToClipboard();
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading claim link...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!claimLink) {
     return (
