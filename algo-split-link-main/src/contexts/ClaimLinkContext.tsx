@@ -310,34 +310,38 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     try {
+      // Use a regular select + limit(1) so that "no rows" returns 200 with an empty array,
+      // instead of 406 with PGRST116 ("Cannot coerce the result to a single JSON object").
       const { data, error } = await supabase
         .from('claim_links')
         .select('*')
         .eq('id', id)
-        .single();
+        .limit(1);
 
       if (error) {
         console.warn('Error fetching claim link from Supabase:', error);
         return undefined;
       }
 
-      if (data) {
+      if (data && data.length > 0) {
+        const row = data[0];
+
         const formattedClaimLink: ClaimLink = {
-          id: data.id,
-          senderAddress: data.sender_address,
-          receiverAddress: data.receiver_address,
-          amount: data.amount,
-          currency: data.currency,
-          createdAt: new Date(data.created_at),
-          expiryDate: data.expiry_date ? new Date(data.expiry_date) : undefined,
-          claimed: data.claimed || false,
-          claimedAt: data.claimed_at ? new Date(data.claimed_at) : undefined,
-          claimedBy: data.claimed_by,
-          status: data.status || 'active',
-          txHash: data.tx_hash,
-          claimTxHash: data.claim_tx_hash,
-          contractAppId: data.contract_app_id,
-          contractAddress: data.contract_address,
+          id: row.id,
+          senderAddress: row.sender_address,
+          receiverAddress: row.receiver_address,
+          amount: row.amount,
+          currency: row.currency,
+          createdAt: new Date(row.created_at),
+          expiryDate: row.expiry_date ? new Date(row.expiry_date) : undefined,
+          claimed: row.claimed || false,
+          claimedAt: row.claimed_at ? new Date(row.claimed_at) : undefined,
+          claimedBy: row.claimed_by,
+          status: row.status || 'active',
+          txHash: row.tx_hash,
+          claimTxHash: row.claim_tx_hash,
+          contractAppId: row.contract_app_id,
+          contractAddress: row.contract_address,
         };
 
         // Add to state so it's available for future lookups
@@ -355,6 +359,7 @@ export const ClaimLinkProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.error('Error fetching claim link from Supabase:', error);
     }
 
+    // No row found or error – treat as "not found" without breaking other flows
     return undefined;
   };
 
